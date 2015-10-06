@@ -42,7 +42,7 @@ protected override void OnApplicationEnd(object sender, EventArgs e)
 		shutDownMessage,
 		shutDownStack);
 
-	Logger.Info<UmbracoApplicationBase>("Application shutdown. Details: " + shutdownMsg);
+	LogHelper.Info<UmbracoApplicationBase>("Application shutdown. Details: " + shutdownMsg);
 }
     
 </script>
