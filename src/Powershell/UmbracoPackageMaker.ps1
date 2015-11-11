@@ -1,12 +1,47 @@
+############################################################### 
+# Input parameters define the version number for the build, if using a pre-release version
+# number, then enter it including the dash, example "-beta", if not using a pre-release version
+# then don't enter anything for that value.
+###############################################################
+
+param (
+	[Parameter(Mandatory=$true)]
+	[ValidatePattern("^\d\.\d\.(?:\d\.\d$|\d$)")]
+	[string]
+	$ReleaseVersionNumber,
+	[Parameter(Mandatory=$true)]
+	[string]
+	[AllowEmptyString()]
+	$PreReleaseName
+)
+
+###############################################################
+# Define some file/folder paths, this assumes that you have output a createdPackages.config
+# from Umbraco's package creator in the back office. You will need to do that first to create
+# the initial package file and copy that template into the $BuildFolder
+###############################################################
+
 # Define the build folder path
-
 $BuildFolder = Join-Path -Path $RepoRoot -ChildPath "build";
-
-####### DO THE UMBRACO PACKAGE BUILD #############
-
-# Set the version number in createdPackages.config
+# Define the createdPackages.config path
 $CreatedPackagesConfig = Join-Path -Path $BuildFolder -ChildPath "createdPackages.config"
+# Define the build output (release) folder path
+$ReleaseFolder = Join-Path -Path $BuildFolder -ChildPath "Releases\v$ReleaseVersionNumber$PreReleaseName";
+
+# Delete the release folder contents if it exists
+if ((Get-Item $ReleaseFolder -ErrorAction SilentlyContinue) -ne $null)
+{
+	Write-Warning "$ReleaseFolder already exists on your local machine. It will now be deleted."
+	Remove-Item $ReleaseFolder -Recurse
+}
+
+###############################################################
+# DO THE UMBRACO PACKAGE BUILD 
+###############################################################
+
+# Load in the XML from the file
 $CreatedPackagesConfigXML = [xml](Get-Content $CreatedPackagesConfig)
+# Set the version number in createdPackages.config
 $CreatedPackagesConfigXML.packages.package.version = "$ReleaseVersionNumber"
 $CreatedPackagesConfigXML.Save($CreatedPackagesConfig)
 
@@ -76,3 +111,7 @@ $PackageManifestXML.Save($PackageManifest)
 $DestZIP = "$ReleaseFolder\Articulate.zip" 
 Add-Type -assembly "system.io.compression.filesystem"
 [io.compression.zipfile]::CreateFromDirectory($TempFolder, $DestZIP) 
+
+###############################################################
+# Finished creating the Umbraco package format as a zip file
+###############################################################
