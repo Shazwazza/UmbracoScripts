@@ -4,6 +4,24 @@
 /// - Parts of this example could work for front-end member implementation with the removal of the /umbraco callback
 ///     paths and the auto-link stuff.
 /// </summary>
+/// <example>
+/// <![CDATA[
+/// 
+///     //this would be used in your OWIN startup class
+///     app.ConfigureBackOfficeAzureActiveDirectoryA2BAuth(
+///         tenant:                 "yourtenantid.onmicrosoft.com",
+///         clientId:               "your-client-id-guid",
+///         clientSecret:           "yoURClientSECreT",
+///         redirectUri:            "https://yourdomain.local/umbraco/",
+///         signUpPolicyId:         "YOUR_SIGN_UP_POLICY_NAME",
+///         signInPolicyId:         "YOUR_SIGN_IN_POLICY_NAME",
+///         userProfilePolicyId:    "YOUR_PROFIL_POLICY_NAME",
+///         adminClientId:          "your-admin-client-id-guid",
+///         adminClientSecret:      "YouRADminClientSeCRet",
+///         caption:                "My cool AD Oauth provider");
+/// 
+/// ]]>
+/// </example>
 public static class UmbracoADAuthExtensions
 {
 
