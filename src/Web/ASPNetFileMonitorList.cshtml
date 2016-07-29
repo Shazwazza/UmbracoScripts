@@ -1,6 +1,7 @@
 @using System.Reflection;
 @using System.Web;
 @using System.Collections;
+@using System.Diagnostics
 
 @model dynamic
 @{
@@ -35,72 +36,116 @@
     var dirMonSubdirsName = dirMonSubdirs == null ? null : dirMonSubdirs.GetType()
         .GetField("Directory", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.IgnoreCase)
         .GetValue(dirMonSubdirs);
-    var dirMonSubdirsIsDirMonAppPathInternal = dirMonSubdirs == null ? null : dirMonSubdirs.GetType() 
+    var dirMonSubdirsIsDirMonAppPathInternal = dirMonSubdirs == null ? null : dirMonSubdirs.GetType()
         .GetField("_isDirMonAppPathInternal", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.IgnoreCase)
         .GetValue(dirMonSubdirs);
     var dirMonSubdirsDirMonCompletion = dirMonSubdirs == null ? null : dirMonSubdirs.GetType()
         .GetField("_dirMonCompletion", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.IgnoreCase)
         .GetValue(dirMonSubdirs);
 }
+
+<!DOCTYPE html>
 <html>
 <head>
-    <style>
-        body {font-family:Arial;font-size:12px;}
-        table {font-size:12px;border:1px solid grey;padding:0;border-collapse: collapse;}
-        td {padding:4px;}
-        tfoot {color:white;font-weight:bold;background-color:black;}
-        thead {color:white;font-weight:bold;background-color:black;}
-    </style>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FCN Viewer</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
 </head>
 <body>
-    <div>
-        <h3>FCN Mode</h3>
-        <ul>
-            <li>This is the detected FCN Mode: @fcnVal</li>
-        </ul>
-        <h3>FileChangesMonitor directory monitor hash table</h3>
-        <table>
-            <thead>
+    <div class="container body-content">
+        <div>
+            <h3>FCN Mode</h3>
+            <ul>
+                <li>This is the detected FCN Mode: @fcnVal</li>
+            </ul>
+            <h3>FileChangesMonitor directory monitor hash table</h3>
+            <table class="table table-striped table-bordered">
+                <thead>
                 <tr>
                     <td>Directory watched</td>
                     <td>File monitor count</td>
                 </tr>
-            </thead>
-            @{
-                var totalFileWatchers = 0;
-            }
-            @foreach(System.Collections.DictionaryEntry d in dirs) 
-            {
-                var fileMons = (Hashtable)d.Value.GetType()
-                    .GetField("_fileMons", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.IgnoreCase)
-                    .GetValue(d.Value);
-                totalFileWatchers += fileMons.Count;
-                <tr>
-                    <td>@d.Key</td>
-                    <td>@fileMons.Count</td>
-                </tr>
-            }  
-            <tfoot>
+                </thead>
+                @{
+                    var totalFileWatchers = 0;
+                }
+                @foreach (System.Collections.DictionaryEntry d in dirs)
+                {
+                    var fileMons = (Hashtable) d.Value.GetType()
+                        .GetField("_fileMons", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.IgnoreCase)
+                        .GetValue(d.Value);
+
+                    //I'm not sure what the difference with the result of this is, the decompiled source
+                    //excludes file monitors that have something to do with "_cShortNames"
+                    var fileMonsCount = d.Value.GetType()
+                        .GetMethod("GetFileMonitorsCount", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.IgnoreCase)
+                        .Invoke(d.Value, null);
+
+                    totalFileWatchers += fileMons.Count;
+                    <tr>
+                        <td>@d.Key</td>
+                        <td>@fileMons.Count</td>
+                    </tr>
+                }
+                <tfoot>
                 <tr>
                     <td>@dirs.Count</td>
                     <td>@totalFileWatchers</td>
                 </tr>
-            </tfoot>          
-        </table>
-        <h3>FCN Mode 'Single' dir monitor properties</h3>
-        <ul>
-            <li>FileChangesMonitor._dirMonAppPathInternal = @dirMonAppPathInternal</li>
-            <li>@dirMonAppPathInternalName</li>
-            <li>_dirMonAppPathInternal._isDirMonAppPathInternal = @dirMonAppPathInternalIsDirMonAppPathInternal</li>
-            <li>_dirMonAppPathInternal._dirMonCompletion = @dirMonAppPathInternalDirMonCompletion</li>
-        </ul>
-        <h3>Normal sub dir monitor properties</h3>
-        <ul>
-            <li>FileChangesMonitor._dirMonSubdirs = @dirMonSubdirs</li>
-            <li>@dirMonSubdirsName</li>
-            <li>_dirMonSubdirs._isDirMonAppPathInternal = @dirMonSubdirsIsDirMonAppPathInternal</li>
-            <li>_dirMonSubdirs._dirMonCompletion = @dirMonSubdirsDirMonCompletion</li>
-        </ul>
+                </tfoot>
+            </table>
+            <h3>FCN Mode 'Single' dir monitor properties</h3>
+            <ul>
+                <li>FileChangesMonitor._dirMonAppPathInternal = @dirMonAppPathInternal</li>
+                <li>@dirMonAppPathInternalName</li>
+                <li>_dirMonAppPathInternal._isDirMonAppPathInternal = @dirMonAppPathInternalIsDirMonAppPathInternal</li>
+                <li>_dirMonAppPathInternal._dirMonCompletion = @dirMonAppPathInternalDirMonCompletion</li>
+            </ul>
+            <h3>Normal sub dir monitor properties</h3>
+            <ul>
+                <li>FileChangesMonitor._dirMonSubdirs = @dirMonSubdirs</li>
+                <li>@dirMonSubdirsName</li>
+                <li>_dirMonSubdirs._isDirMonAppPathInternal = @dirMonSubdirsIsDirMonAppPathInternal</li>
+                <li>_dirMonSubdirs._dirMonCompletion = @dirMonSubdirsDirMonCompletion</li>
+            </ul>
+        </div>
+        <div>
+            @{
+                PerformanceCounter pc1 = new PerformanceCounter("ASP.NET Applications",
+                                                            "Requests Total",
+                                                            "__Total__");
+
+                PerformanceCounter pc2 = new PerformanceCounter("ASP.NET",
+                                                                "Application Restarts");
+
+                Type t = typeof(HttpRuntime).Assembly.GetType(
+                                                           "System.Web.DirMonCompletion");
+
+                int dirMonCount = (int)t.InvokeMember("_activeDirMonCompletions",
+                                                       BindingFlags.NonPublic
+                                                       | BindingFlags.Static
+                                                       | BindingFlags.GetField,
+                                                       null,
+                                                       null,
+                                                       null);
+
+                // The perf client polls the server every 400 milliseconds
+                System.Threading.Thread.Sleep(800);
+
+                //Response.Output.WriteLine(
+                //                        "Requests={0},Restarts={1},DirMonCompletions={2}",
+                //                        pc1.NextValue(),
+                //                        pc2.NextValue(),
+                //                        dirMonCount);
+            }
+            <h3>Performance monitor properties</h3>
+            <ul>
+                <li>ASP.NET Applications - Requests Total = @pc1.NextValue()</li>
+                <li>ASP.NET - Application Restarts = @pc2.NextValue()</li>
+                <li>DirMonCompletions = @dirMonCount</li>
+            </ul>
+        </div>
     </div>
 </body>
 </html>
