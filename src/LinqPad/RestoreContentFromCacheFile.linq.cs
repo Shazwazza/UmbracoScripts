@@ -18,7 +18,7 @@ foreach (var xmlContentItem in xmlDocument.Root.XPathSelectElements("//*[@isDoc]
 		continue;
 	}
 	
-	foreach (var xmlProperty in xmlContentItem.XPathSelectElements("/*[not(@isDoc)]"))
+	foreach (var xmlProperty in xmlContentItem.XPathSelectElements("./*[not(@isDoc)]"))
 	{
 		var propertyAlias = xmlProperty.Name.LocalName;
 		("Processing property with alias " + propertyAlias).Dump();
