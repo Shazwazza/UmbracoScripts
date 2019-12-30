@@ -1,32 +1,14 @@
 using System;
-using System.Text;
 using System.Threading;
-using System.Collections;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Web.Mvc;
-using Umbraco.Core;
 using Umbraco.Core.Services;
-using Umbraco.Core.Macros;
 using Umbraco.Core.Models;
-using Umbraco.Web.WebApi;
-using Umbraco.Web.Mvc;
-using Umbraco.Web.Models;
-using System.Globalization;
-using System.Linq;
-using System.Net.Http.Formatting;
 using System.Web;
 using System.Web.Hosting;
-using System.Web.Mvc;
-using System.Web.Mvc;
 using System.Web.Routing;
-using Umbraco.Core;
-using Umbraco.Web.Models.Trees;
-using Umbraco.Web.Trees;
-using Umbraco.Web.Mvc;
 using System.Diagnostics;
+using Umbraco.Core.Composing;
 
 // need: this file, Zbu.WebManagement, Interop.mscoree.dll
 // hit /LoadTest on a fresh install
@@ -37,16 +19,21 @@ namespace Zbu.LoadTest
 {
     public class LoadTestController : Controller
     {
+        public LoadTestController(ServiceContext serviceContext)
+        {
+            _serviceContext = serviceContext;
+        }
+
         private static readonly Random _random = new Random();
         private static readonly object _locko = new object();
-        
+
         private static volatile int _containerId = -1;
-        
+
         private const string _containerAlias = "LoadTestContainer";
         private const string _contentAlias = "LoadTestContent";
         private const int _textboxDefinitionId = -88;
         private const int _maxCreate = 1000;
-        
+
         private static readonly string HeadHtml = @"<html>
 <head>
   <title>LoadTest</title>
@@ -67,10 +54,10 @@ namespace Zbu.LoadTest
   <div class=""ver"">" + System.Configuration.ConfigurationManager.AppSettings["umbracoConfigurationStatus"] + @"</div>
   </div>
 ";
-        
+
         private const string FootHtml = @"</body>
 </html>";
-        
+
         private static readonly string _containerTemplateText = @"
 @inherits Umbraco.Web.Mvc.UmbracoTemplatePage
 @{
@@ -110,17 +97,18 @@ namespace Zbu.LoadTest
 }
 </div>
 " + FootHtml;
-                
+        private readonly ServiceContext _serviceContext;
+
         private ActionResult ContentHtml(string s)
         {
             return Content(HeadHtml + s + FootHtml);
         }
-        
+
         public ActionResult Index()
         {
             var res = EnsureInitialize();
             if (res != null) return res;
-            
+
             var html = @"Welcome. You can:
 <ul>
     <li><a href=""/LoadTestContainer"">List existing contents</a> (u:url)</li>
@@ -132,51 +120,50 @@ namespace Zbu.LoadTest
     <li><a href=""/LoadTest/Die"">Cause w3wp.exe to die</a></li>
 </ul>
 ";
-           
+
             return ContentHtml(html);
         }
-        
+
         private ActionResult EnsureInitialize()
         {
             if (_containerId > 0) return null;
-            
+
             lock (_locko)
             {
                 if (_containerId > 0) return null;
-                
-                var contentTypeService = ApplicationContext.Current.Services.ContentTypeService;
-                var contentType = contentTypeService.GetContentType(_contentAlias);
+
+                var contentTypeService = _serviceContext.ContentTypeService;
+                var contentType = contentTypeService.Get(_contentAlias);
                 if (contentType == null)
                     return ContentHtml("Not installed, first you must <a href=\"/LoadTest/Install\">install</a>.");
-                
-                var containerType = contentTypeService.GetContentType(_containerAlias);
+
+                var containerType = contentTypeService.Get(_containerAlias);
                 if (containerType == null)
                     return ContentHtml("Panic! Container type is missing.");
 
-                var contentService = ApplicationContext.Current.Services.ContentService;
-                var container = contentService.GetContentOfContentType(containerType.Id).FirstOrDefault();
+                var contentService = _serviceContext.ContentService;
+                var container = contentService.GetPagedOfType(containerType.Id, 0, 100, out _, null).FirstOrDefault();
                 if (container == null)
                     return ContentHtml("Panic! Container is missing.");
-                
+
                 _containerId = container.Id;
                 return null;
             }
         }
-        
+
         public ActionResult Install()
         {
-            var dataTypeService = ApplicationContext.Current.Services.DataTypeService;
-            
-            var dataType = dataTypeService.GetDataTypeDefinitionById(Constants.System.DefaultContentListViewDataTypeId);
-            var preVals = dataTypeService.GetPreValuesCollectionByDataTypeId(dataType.Id);
-            var dict = preVals.FormatAsDictionary();
-            
-            if (!dict.ContainsKey("pageSize")) dict["pageSize"] = new PreValue("10");
-            dict["pageSize"].Value = "200";
-            dataTypeService.SavePreValues(dataType, dict);
+            var dataTypeService = _serviceContext.DataTypeService;
 
-            var contentTypeService = ApplicationContext.Current.Services.ContentTypeService;
+            //var dataType = dataTypeService.GetAll(Constants.DataTypes.DefaultContentListView);
             
+
+            //if (!dict.ContainsKey("pageSize")) dict["pageSize"] = new PreValue("10");
+            //dict["pageSize"].Value = "200";
+            //dataTypeService.SavePreValues(dataType, dict);
+
+            var contentTypeService = _serviceContext.ContentTypeService;
+
             var contentType = new ContentType(-1)
             {
                 Alias = _contentAlias,
@@ -184,7 +171,7 @@ namespace Zbu.LoadTest
                 Description = "Content for LoadTest",
                 Icon = "icon-document"
             };
-            var def = ApplicationContext.Current.Services.DataTypeService.GetDataTypeDefinitionById(_textboxDefinitionId);
+            var def = _serviceContext.DataTypeService.GetDataType(_textboxDefinitionId);
             contentType.AddPropertyType(new PropertyType(def)
             {
                 Name = "Origin",
@@ -193,9 +180,9 @@ namespace Zbu.LoadTest
             });
             contentTypeService.Save(contentType);
 
-            var containerTemplate = ImportTemplate(ApplicationContext.Current.Services,
-                "~/Views/LoadTestContainer.cshtml", "LoadTestContainer", "LoadTestContainer", _containerTemplateText);
-            
+            var containerTemplate = ImportTemplate(_serviceContext,
+                 "LoadTestContainer", "LoadTestContainer", _containerTemplateText);
+
             var containerType = new ContentType(-1)
             {
                 Alias = _containerAlias,
@@ -212,14 +199,14 @@ namespace Zbu.LoadTest
             containerType.AllowedTemplates = containerType.AllowedTemplates.Union(new[] { containerTemplate });
             containerType.SetDefaultTemplate(containerTemplate);
             contentTypeService.Save(containerType);
-                        
-            var contentService = ApplicationContext.Current.Services.ContentService;
-            var content = contentService.CreateContent("LoadTestContainer", -1, _containerAlias);
-            contentService.SaveAndPublishWithStatus(content);
-            
+
+            var contentService = _serviceContext.ContentService;
+            var content = contentService.Create("LoadTestContainer", -1, _containerAlias);
+            contentService.SaveAndPublish(content);
+
             return ContentHtml("Installed.");
         }
-        
+
         public ActionResult Create(int n = 1, int r = 0, string o = null)
         {
             var res = EnsureInitialize();
@@ -229,26 +216,26 @@ namespace Zbu.LoadTest
             if (r > 100) r = 100;
             var restart = GetRandom(0, 100) > (100 - r);
 
-            var contentService = ApplicationContext.Current.Services.ContentService;
-            
+            var contentService = _serviceContext.ContentService;
+
             if (n < 1) n = 1;
             if (n > _maxCreate) n = _maxCreate;
             for (int i = 0; i < n; i++)
             {
                 var name = Guid.NewGuid().ToString("N").ToUpper() + "-" + (restart ? "R" : "X") + "-" + o;
-                var content = contentService.CreateContent(name, _containerId, _contentAlias);
+                var content = contentService.Create(name, _containerId, _contentAlias);
                 content.SetValue("origin", o);
-                contentService.SaveAndPublishWithStatus(content);
+                contentService.SaveAndPublish(content);
             }
-                        
+
             if (restart)
                 DoRestart();
 
-            return ContentHtml("Created "  + n + " content"
-                +  (restart ? ", and restarted" : "") 
+            return ContentHtml("Created " + n + " content"
+                + (restart ? ", and restarted" : "")
                 + ".");
         }
-        
+
         private int GetRandom(int minValue, int maxValue)
         {
             lock (_locko)
@@ -256,41 +243,41 @@ namespace Zbu.LoadTest
                 return _random.Next(minValue, maxValue);
             }
         }
-        
-		public ActionResult Clear()
-		{
+
+        public ActionResult Clear()
+        {
             var res = EnsureInitialize();
             if (res != null) return res;
 
-			var contentType = ApplicationContext.Current.Services.ContentTypeService.GetContentType(_contentAlias);
-			ApplicationContext.Current.Services.ContentService.DeleteContentOfType(contentType.Id);
-            
+            var contentType = _serviceContext.ContentTypeService.Get(_contentAlias);
+            _serviceContext.ContentService.DeleteOfType(contentType.Id);
+
             return ContentHtml("Cleared.");
-		}
-        
+        }
+
         private void DoRestart()
         {
             HttpContext.User = null;
             System.Web.HttpContext.Current.User = null;
-            Thread.CurrentPrincipal = null;            
-			HttpRuntime.UnloadAppDomain();
+            Thread.CurrentPrincipal = null;
+            HttpRuntime.UnloadAppDomain();
         }
-		
-		public ActionResult Restart()
-		{
+
+        public ActionResult Restart()
+        {
             DoRestart();
-            
-			return ContentHtml("Restarted.");
-		}
-        
+
+            return ContentHtml("Restarted.");
+        }
+
         public ActionResult Die()
         {
-            var timer = new System.Threading.Timer(_ => 
+            var timer = new System.Threading.Timer(_ =>
             {
                 throw new Exception("die!");
             });
-            timer.Change(100,0);
-           
+            timer.Change(100, 0);
+
             return ContentHtml("Dying.");
         }
 
@@ -300,7 +287,7 @@ namespace Zbu.LoadTest
             var currentName = currentDomain.FriendlyName;
             var pos = currentName.IndexOf('-');
             if (pos > 0) currentName = currentName.Substring(0, pos);
-            
+
             var text = new System.Text.StringBuilder();
             text.Append("<div class=\"block\">Process ID: " + Process.GetCurrentProcess().Id + "</div>");
             text.Append("<div class=\"block\">");
@@ -308,7 +295,7 @@ namespace Zbu.LoadTest
             text.Append("<div>App ID: " + currentName + "</div>");
             //text.Append("<div>AppPool: " + Zbu.WebManagement.AppPoolHelper.GetCurrentApplicationPoolName() + "</div>");
             text.Append("</div>");
-            
+
             text.Append("<div class=\"block\">Domains:<ul>");
             text.Append("<li>Not implemented.</li>");
             /*
@@ -328,18 +315,18 @@ namespace Zbu.LoadTest
             }
             */
             text.Append("</ul></div>");
-            
+
             return ContentHtml(text.ToString());
         }
-        
+
         public ActionResult Recycle()
         {
             return ContentHtml("Not implemented&mdash;please use IIS console.");
         }
 
-        private static Template ImportTemplate(ServiceContext svces, string filepath, string name, string alias, string text, ITemplate master = null)
+        private static Template ImportTemplate(ServiceContext svces, string name, string alias, string text, ITemplate master = null)
         {
-            var t = new Template(filepath, name, alias) { Content = text };
+            var t = new Template(name, alias) { Content = text };
             if (master != null)
                 t.SetMasterTemplate(master);
             svces.FileService.SaveTemplate(t);
@@ -347,16 +334,14 @@ namespace Zbu.LoadTest
         }
     }
 
-    public class Startup : ApplicationEventHandler
+    public class TestComponent : IComponent
     {
-        protected override void ApplicationStarted(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
+        public void Initialize()
         {
-            base.ApplicationStarted(umbracoApplication, applicationContext);
-
             RouteTable.Routes.MapRoute(
                name: "LoadTest",
                //url: "umbraco/backoffice/zbqrtbnk/LoadTest/{action}";
-			   url: "LoadTest/{action}",
+               url: "LoadTest/{action}",
                defaults: new
                {
                    controller = "LoadTest",
@@ -364,6 +349,20 @@ namespace Zbu.LoadTest
                },
                namespaces: new[] { "Zbu.LoadTest" }
            );
+        }
+
+        public void Terminate()
+        {            
+        }
+    }
+
+    public class TestComposer : ComponentComposer<TestComponent>, IUserComposer
+    {
+        public override void Compose(Composition composition)
+        {
+            base.Compose(composition);
+
+            composition.Register(typeof(LoadTestController), Lifetime.Request);
         }
     }
 }
