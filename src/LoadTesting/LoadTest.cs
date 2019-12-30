@@ -59,12 +59,12 @@ namespace Zbu.LoadTest
 </html>";
 
         private static readonly string _containerTemplateText = @"
-@inherits Umbraco.Web.Mvc.UmbracoTemplatePage
+@inherits Umbraco.Web.Mvc.UmbracoViewPage
 @{
     Layout = null;
-    var container = Umbraco.TypedContentAtRoot().OfTypes(""" + _containerAlias + @""").FirstOrDefault();
+    var container = Umbraco.ContentAtRoot().OfTypes(""" + _containerAlias + @""").FirstOrDefault();
     var contents = container.Children().ToArray();
-    var groups = contents.GroupBy(x => x.GetPropertyValue<string>(""origin""));
+    var groups = contents.GroupBy(x => x.Value<string>(""origin""));
     var id = contents.Length > 0 ? contents[0].Id : -1;
     var wurl = Request.QueryString[""u""] == ""1"";
     var missing = contents.Length > 0 && contents[contents.Length - 1].Id - contents[0].Id >= contents.Length;
