@@ -82,6 +82,7 @@ stages:
   condition: contains(variables['Build.SourceBranch'], 'tags/release-')
   jobs:  
   - deployment: DeployToCloud
+    # Track executed jobs against an "Umbraco Cloud", if it doesnt exist it will be created
     environment: Umbraco Cloud
     strategy:       
       runOnce:        
