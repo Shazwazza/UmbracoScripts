@@ -1,0 +1,99 @@
+# ************** REQUIREMENTS **************
+
+# This file should be committed to the root of your Git repository
+
+# You must have the DeployToUmbracoCloud.ps1 file committed to the ./Build folder of your
+# Git repository. The file can be found here: http://bit.ly/33kTiJG
+
+# Azure Pipelines variables:
+# * gitAddress = The full Git https endpoint for your Dev environment on Umbraco Cloud
+# * gitUsername = Your Umbraco Cloud email address
+# * gitPassword = Your Umbraco Cloud password - ensure this value is set to Secret
+
+trigger:
+  branches:
+    include:
+    - master
+    - refs/tags/*
+  tags:
+    include:
+     - release-*
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  # This builds all sln files, this could be updated to target what you want to build
+  solution: '**/*.sln'
+  # Typically none of these should be changed!
+  buildPlatform: 'Any CPU'
+  buildConfiguration: 'Release'
+  publishDir: '$(build.artifactStagingDirectory)\_Publish'
+  cloneDir: '$(build.artifactStagingDirectory)\_UmbracoCloud'
+  zipDir: '$(build.artifactStagingDirectory)\_Zip'
+  deployScript: 'DeployToUmbracoCloud.ps1'
+
+stages:
+- stage: Build
+  jobs:
+  - job: RestoreBuildPublish
+    steps:
+    - task: NuGetToolInstaller@1
+
+    - task: NuGetCommand@2
+      inputs:
+        restoreSolution: '$(solution)'
+        feedsToUse: 'config'
+        nugetConfigPath: 'src/Nuget.config'
+
+    # Build the VS Solution and publish using the old Web application publishing msbuild target
+    - task: VSBuild@1
+      inputs:
+        solution: '$(solution)'
+        msbuildArgs: /p:UseWPP_CopyWebApplication=True /p:PipelineDependsOnBuild=False /p:PublishProfile=ToFileSys.pubxml /p:DeployOnBuild=true /p:AutoParameterizationWebConfigConnectionStrings=False /p:PublishOutDir=$(publishDir)
+        platform: '$(buildPlatform)'
+        configuration: '$(buildConfiguration)'
+
+    # Zip the output
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: '$(publishDir)'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(zipDir)/$(Build.BuildId).zip'
+        replaceExistingArchive: true
+    
+    # publish the zipped out website
+    - task: PublishBuildArtifacts@1
+      inputs:
+        PathtoPublish: '$(zipDir)'
+        ArtifactName: 'zip'
+        publishLocation: 'Container'
+    
+    # publish the Umbraco Deploy build file
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathtoPublish: '$(build.sourcesDirectory)\build\$(deployScript)' 
+        artifactName: 'buildScript' 
+        publishLocation: 'Container'
+
+- stage: Deploy
+  # Only run when there is a release-* tag
+  condition: contains(variables['Build.SourceBranch'], 'tags/release-')
+  jobs:  
+  - deployment: DeployToCloud
+    environment: Umbraco Cloud
+    strategy:       
+      runOnce:        
+        deploy:
+          steps:
+          - task: ExtractFiles@1
+            inputs:
+              # A deployment task automatically downloads artifacts published to this folder
+              archiveFilePatterns: '$(Agent.BuildDirectory)\zip\*.zip'
+              destinationFolder: '$(publishDir)'
+              cleanDestinationFolder: true
+          # Run the powershell script to create a new Git commit and push to Umbraco Cloud
+          - powershell: $(Agent.BuildDirectory)\buildScript\$(deployScript) -cloneurl "$(gitAddress)" -uaasuser "$(gitUsername)" -password "$(gitPassword)" -sourcepath "$(publishDir)" -destinationpath "$(cloneDir)"
+            failOnStderr: true
+            enabled: true
