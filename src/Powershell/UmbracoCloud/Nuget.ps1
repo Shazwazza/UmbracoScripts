@@ -170,22 +170,6 @@ function Invoke-NugetToolsScripts {
         [string] $CsProjFile
     )
 
-    # TODO: After running this we need to manually call the /tools/install.ps1 script - since we don't know what they will do we can filter this to only run
-    # when it's the UmbracoCms. But to do that we need to pass in the correct params which is difficult to figure out. 
-    # the script takes these params param($installPath, $toolsPath, $package, $project)
-    # * installPath: $installPath is the path to the folder where the package is installed. By default: $(solutionDir)\packages
-    #       ... which (for example): C:\Users\Shannon\Documents\_Projects\Shazwazza\Repo\shazwazza.com\src\packages\UmbracoCms.8.6.1
-    # * $toolPath is the path to the \tools directory in the folder where the package is installed. By default: $(solutionDir)\packages\[packageId]-[version]\tools
-    #       ... which (for example): C:\Users\Shannon\Documents\_Projects\Shazwazza\Repo\shazwazza.com\src\packages\UmbracoCms.8.6.1\tools
-    # * $package is a reference to the package object 
-    #       ... NOT USED FOR UMBRACO
-    # * $project is a reference to the target EnvDTE project object. This object is defined here.
-    #       ... $projectPath = (Get-Item $project.Properties.Item("FullPath").Value).FullName is used for UMBRACO
-    #       ... which (for example): C:\Users\Shannon\Documents\_Projects\Shazwazza\Repo\shazwazza.com\src\Shazwazza.Web\
-    # see https://stackoverflow.com/a/41999946/694494
-    # The source file for the VS console nuget manager is here 
-    # C:\Program Files (x86)\Microsoft Visual Studio\2019\Preview\Common7\IDE\CommonExtensions\Microsoft\NuGet\Modules\NuGet
-
     # first we need to construct the "installPath"
     $installPath = Join-Path $PackagesPath "$PackageName.$PackageVersion"
     if (!(Test-Path -Path $installPath)) {
